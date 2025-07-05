@@ -17,13 +17,7 @@ class XRNNAgent(nn.Module):
         self.rnn_hidden_dim = args.rnn_hidden_dim
         self.embed_dim = args.mixing_embed_dim
         hypernet_embed = self.args.hypernet_embed
-        
-        combine_type = 'gin'
-        self.mixing_GNN = GNN(num_input_features=1, hidden_layers=[self.embed_dim],hypernet_embed=hypernet_embed,
-                              weights_operation='abs',
-                              combine_type=combine_type)
         self.fc_out = nn.Linear(input_shape, args.rnn_hidden_dim)
-        # attention mechanism
         self.enc_obs = True
         obs_dim = args.rnn_hidden_dim
         if self.enc_obs:
@@ -39,28 +33,23 @@ class XRNNAgent(nn.Module):
         self.W_attn_key = nn.Linear(self.obs_dim_effective, self.obs_dim_effective, bias=False)
         self.scale_factor = nn.Parameter(th.tensor(1.0))
     def init_hidden(self):
-        # make hidden states on same device as model
         return self.fc1.weight.new(1, self.args.rnn_hidden_dim).zero_()
 
     def forward(self, inputs, hidden_states=None):
         b, a, e = inputs.size()
         input0 = inputs
-        alive_agents = 1. * (th.sum(input0, dim=2) > 0).view(-1, self.n_agents) # find the agents which are alive
-        # create a mask for isolating nodes which are dead by taking the outer product of the above tensor with itself
+        alive_agents = 1. * (th.sum(input0, dim=2) > 0).view(-1, self.n_agents) 
         alive_agents_mask = th.bmm(alive_agents.unsqueeze(2), alive_agents.unsqueeze(1))
         x = F.relu(self.fc1(input0.view(-1, e)), inplace=True)
         if hidden_states is not None:
             hidden_states = hidden_states.reshape(-1, self.args.rnn_hidden_dim)
         h = self.rnn(x, hidden_states)
-        w = h
-        # encode hidden states
+
         encoded_hidden_states = self.obs_encoder(h)
         encoded_hidden_states = encoded_hidden_states.contiguous().view(-1, self.n_agents, self.obs_dim_effective)
-        # adjacency based on the attention mechanism
         attn_query = self.W_attn_query(encoded_hidden_states)
         attn_key = self.W_attn_key(encoded_hidden_states)
         attn = th.matmul(attn_query, th.transpose(attn_key, 1, 2)) / np.sqrt(self.obs_dim_effective)
-        # make the attention with softmax very small for dead agents so they get zero attention
         attn = nn.Softmax(dim=2)(attn + (-1e10 * (1 - alive_agents_mask)))
         batch_adj = attn * alive_agents_mask
         out, _, _ = self.mixing_GNN(input0, batch_adj, self.n_agents)

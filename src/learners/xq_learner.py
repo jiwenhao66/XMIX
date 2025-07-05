@@ -121,12 +121,8 @@ class XQLearner:
         else:
             chosen_action_qvals = self.mixer(chosen_action_qvals, batch["state"][:, :-1])
         temporal_credits = th.transpose(temporal_credits, dim0=1, dim1=2)
-        zero_padding = th.zeros([self.args.batch_size, self.args.n_agents, self.args.episode_limit - batch["state"].shape[1] + 1], dtype=th.float32).to(batch.device)
-        temporal_credits = th.cat([temporal_credits, zero_padding], dim=-1)
-        self.identity = self.identity.to(batch.device)
         identity_emb = self.identity(temporal_credits)
         identity_emb = th.transpose(identity_emb, dim0=1, dim1=2)
-        identity_emb = identity_emb.reshape(-1, self.args.n_agents)
         identity_label = th.arange(0, self.args.n_agents)
         identity_label = identity_label.repeat(self.args.batch_size).to(batch.device)
         identity_loss = self.loss(identity_emb, identity_label) 
