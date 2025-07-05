@@ -2,7 +2,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from modules.layer.multi_gat import MultiAgentGAT
 import torch as th
-from ..GNNs.gnn import GNN
 import numpy as np
 from torch_geometric.data import Data
 class XRNNAgent(nn.Module):
